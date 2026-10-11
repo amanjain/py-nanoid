@@ -7,16 +7,40 @@ permissions:
   contents: read
 jobs:
   compatibility:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.7', '3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14', '3.15']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Test installed package with tox
+        run: |
+          version=${{ matrix.python }}
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade -r requirements-tox.txt
+          python -m tox -e "py${version/./}"
+  legacy:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python: ['2.7', '3.5', '3.6', '3.7', '3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14', '3.15']
+        python: ['2.7', '3.5', '3.6']
     steps:
       - uses: actions/checkout@v7
-      # Containers keep EOL interpreters testable on current GitHub runners.
-      - name: Test all historical and current interpreters
-        run: docker run --rm -v "$PWD:/src" -w /src python:${{ matrix.python }} sh -c 'python -m pip install --upgrade pip && python -m pip install --upgrade -r requirements-tox.txt && python -m tox -e py$(echo "${{ matrix.python }}" | tr -d ".")'
+      - name: Test oldest interpreters with tox
+        run: |
+          version=${{ matrix.python }}
+          tox_env=py${version/./}
+          tar --exclude=.git --exclude=.tox -cf - . | \
+            docker run --rm -i -w /src python:"$version" \
+              sh -c "tar -xf - -C /src && \
+                     python -m pip install --upgrade pip && \
+                     python -m pip install --upgrade -r requirements-tox.txt && \
+                     python -m tox -e $tox_env"
   packaging:
     runs-on: ubuntu-latest
     steps:
